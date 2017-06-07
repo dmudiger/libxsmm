@@ -955,22 +955,22 @@ ifneq (undefined,$(origin TARGET))
 endif
 
 # check target flags by feeding an ad-hoc C program into the compiler
-ifneq (0,$(shell CINFILE=$$(mktemp checkXXXXXX.c); \
+ifneq (0,$(shell CINFILE=$$(mktemp /tmp/.libxsmm_XXXXXX.c); \
   echo "int main(void) { return 0; }" > $${CINFILE}; \
   CTEST=$$($(CC) $(CTARGET) -c $${CINFILE} 2>&1); \
   if [ "" = "$${CTEST}" ]; then echo $$?; else echo 1; fi; \
-  rm -f check??????.c check??????.o*))
+  rm -f /tmp/.libxsmm_??????.c .libxsmm_??????.o*))
 # revoke target flags
   CTARGET = $(NULL)
 endif
 
 ifneq (,$(strip $(FC))) # check target flags by feeding an ad-hoc Fortran program into the compiler
-ifeq (0,$(shell FINFILE=$$(mktemp checkXXXXXX.f); \
+ifeq (0,$(shell FINFILE=$$(mktemp /tmp/.libxsmm_XXXXXX.f); \
   echo "      PROGRAM test" > $${FINFILE}; \
   echo "      END PROGRAM" >> $${FINFILE}; \
   FTEST=$$($(FC) $(CTARGET) -c $${FINFILE} 2>&1); \
   if [ "" = "$${FTEST}" ]; then echo $$?; else echo 1; fi; \
-  rm -f check??????.f check??????.o*))
+  rm -f /tmp/.libxsmm_??????.f .libxsmm_??????.o*))
 # inherit CTARGET flags
   FTARGET = $(CTARGET)
 endif
@@ -983,7 +983,11 @@ ifneq (0,$(THREADS))
     CFLAGS += -pthread
     FLDFLAGS += -lpthread
     ifneq (Windows_NT,$(UNAME))
-      CLDFLAGS += -pthread
+      ifneq (Darwin,$(UNAME))
+        CLDFLAGS += -pthread
+      else ifeq (0,$(CLANG))
+        CLDFLAGS += -pthread
+      endif
     endif
   endif
 else

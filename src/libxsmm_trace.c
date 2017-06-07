@@ -103,18 +103,20 @@ LIBXSMM_EXTERN int posix_fallocate(int, off_t, off_t);
 
 #if defined(_WIN32) || defined(__CYGWIN__)
 # define LIBXSMM_TRACE_MINDEPTH 5
-LIBXSMM_API_INTERN volatile LONG internal_trace_initialized /*= -1*/;
+LIBXSMM_API_VARIABLE volatile LONG internal_trace_initialized /*= -1*/;
 #else
 # define LIBXSMM_TRACE_MINDEPTH 4
-LIBXSMM_API_INTERN int internal_trace_initialized /*= -1*/;
+LIBXSMM_API_VARIABLE int internal_trace_initialized /*= -1*/;
 #if !defined(LIBXSMM_NO_SYNC)
-LIBXSMM_API_INTERN pthread_key_t internal_trace_key /*= 0*/;
+LIBXSMM_API_VARIABLE pthread_key_t internal_trace_key /*= 0*/;
 #endif
 LIBXSMM_API void internal_delete(void* value);
 LIBXSMM_API_DEFINITION void internal_delete(void* value)
 {
   int fd;
+#if !(defined(__APPLE__) && defined(__MACH__))
   assert(value);
+#endif
   fd = *((int*)value);
 #if defined(NDEBUG)
   munmap(value, LIBXSMM_TRACE_SYMBOLSIZE);
@@ -137,9 +139,9 @@ LIBXSMM_API_DEFINITION void internal_delete(void* value)
 #endif /*!defined(_WIN32) && !defined(__CYGWIN__)*/
 
 
-LIBXSMM_API_INTERN int internal_trace_mindepth /*=  0*/;
-LIBXSMM_API_INTERN int internal_trace_threadid /*= -1*/;
-LIBXSMM_API_INTERN int internal_trace_maxnsyms /*= -1*/;
+LIBXSMM_API_VARIABLE int internal_trace_mindepth /*=  0*/;
+LIBXSMM_API_VARIABLE int internal_trace_threadid /*= -1*/;
+LIBXSMM_API_VARIABLE int internal_trace_maxnsyms /*= -1*/;
 
 
 LIBXSMM_API
@@ -329,7 +331,7 @@ const char* libxsmm_trace_info(unsigned int* depth, unsigned int* threadid, cons
             }
           }
           else {
-            char filename[] = "/tmp/fileXXXXXX";
+            char filename[] = "/tmp/.libxsmm_XXXXXX.map";
             fd = mkstemp(filename);
 
             if (0 <= fd && 0 == posix_fallocate(fd, 0, LIBXSMM_TRACE_SYMBOLSIZE)) {
@@ -454,14 +456,10 @@ LIBXSMM_API_DEFINITION void libxsmm_trace(FILE* stream, unsigned int depth, cons
 }
 
 
-#if defined(__GNUC__)
+#if defined(__GNUC__) && defined(LIBXSMM_BUILD)
 
-#if !defined(LIBXSMM_BUILD) && defined(__APPLE__) && defined(__MACH__)
-LIBXSMM_PRAGMA_OPTIMIZE_OFF
-#endif
-
-LIBXSMM_API_PRIVATE LIBXSMM_ATTRIBUTE(no_instrument_function) void __cyg_profile_func_enter(void*, void*);
-LIBXSMM_API_PRIVATE void __cyg_profile_func_enter(void* this_fn, void* call_site)
+LIBXSMM_API_EXTERN LIBXSMM_ATTRIBUTE(no_instrument_function) void __cyg_profile_func_enter(void* this_fn, void* call_site);
+LIBXSMM_API_INTERN void __cyg_profile_func_enter(void* this_fn, void* call_site)
 {
 #if defined(__TRACE)
 # if !defined(LIBXSMM_TRACE_DLINFO)
@@ -497,15 +495,11 @@ LIBXSMM_API_PRIVATE void __cyg_profile_func_enter(void* this_fn, void* call_site
 }
 
 
-LIBXSMM_API_PRIVATE LIBXSMM_ATTRIBUTE(no_instrument_function) void __cyg_profile_func_exit(void*, void*);
-LIBXSMM_API_PRIVATE void __cyg_profile_func_exit(void* this_fn, void* call_site)
+LIBXSMM_API_EXTERN LIBXSMM_ATTRIBUTE(no_instrument_function) void __cyg_profile_func_exit(void* this_fn, void* call_site);
+LIBXSMM_API_INTERN void __cyg_profile_func_exit(void* this_fn, void* call_site)
 {
   LIBXSMM_UNUSED(this_fn); LIBXSMM_UNUSED(call_site); /* suppress warning */
 }
 
-#if !defined(LIBXSMM_BUILD) && defined(__APPLE__) && defined(__MACH__)
-LIBXSMM_PRAGMA_OPTIMIZE_ON
-#endif
-
-#endif /*defined(__GNUC__)*/
+#endif /*defined(__GNUC__) && defined(LIBXSMM_BUILD)*/
 

@@ -319,6 +319,8 @@ typedef struct LIBXSMM_MAY_ALIAS libxsmm_convolution_winograd_descriptor {
   unsigned int bimg;
   /** unroll factor */
   unsigned int ur;
+  /** number of ifm blocks to unroll */
+  unsigned int ur_ifm;
   /** prefetch type, can be ORed vales of libxsmm_convolution_prefetch_type */
   libxsmm_convolution_prefetch_type prefetch;
 } libxsmm_convolution_winograd_descriptor;

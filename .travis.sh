@@ -39,6 +39,9 @@ RM=$(which rm 2> /dev/null)
 
 if [ "" != "${MKTEMP}" ] && [ "" != "${CHMOD}" ] && [ "" != "${SED}" ] && [ "" != "${TR}" ] && [ "" != "${RM}" ]; then
   if [ "" = "${TRAVIS_BUILD_DIR}" ]; then
+    export TRAVIS_BUILD_DIR=${BUILDKITE_BUILD_CHECKOUT_PATH}
+  fi
+  if [ "" = "${TRAVIS_BUILD_DIR}" ]; then
     export TRAVIS_BUILD_DIR=${HERE}
   fi
   if [ "" = "${TRAVIS_OS_NAME}" ] && [ "" != "$(which uname)" ]; then
@@ -64,8 +67,8 @@ if [ "" != "${MKTEMP}" ] && [ "" != "${CHMOD}" ] && [ "" != "${SED}" ] && [ "" !
   # setup batch execution
   if [ "" = "${LAUNCH}" ] && [ "" != "${SRUN}" ]; then
     if [ "" = "${SRUN_CPUS_PER_TASK}" ]; then SRUN_CPUS_PER_TASK=2; fi
-    TESTSCRIPT=$(${MKTEMP} ${HERE}/XXXXXX.sh)
-    ${CHMOD} +x ${TESTSCRIPT}
+    TESTSCRIPT=$(${MKTEMP} ${HERE}/.libxsmm_XXXXXX.sh)
+    ${CHMOD} a+rwx ${TESTSCRIPT}
     LAUNCH="${SRUN} \
       --ntasks=1 --cpus-per-task=${SRUN_CPUS_PER_TASK} \
       --partition=\${PARTITION} --preserve-env --pty bash -l ${TESTSCRIPT}"
@@ -97,6 +100,10 @@ if [ "" != "${MKTEMP}" ] && [ "" != "${CHMOD}" ] && [ "" != "${SED}" ] && [ "" !
       # prepare temporary script
       if [ "" != "${TESTSCRIPT}" ] && [ -e ${TESTSCRIPT} ]; then
         echo "#!/bin/bash" > ${TESTSCRIPT}
+        # re-source the required environment
+        echo "source ${TRAVIS_BUILD_DIR}/.travis.env" >> ${TESTSCRIPT}
+        echo "source ${TRAVIS_BUILD_DIR}/.buildkite.env" >> ${TESTSCRIPT}
+        # record the actual test case
         echo "${TEST}" >> ${TESTSCRIPT}
       fi
 
