@@ -904,6 +904,11 @@ void libxsmm_generator_gemm_avx512_microkernel_qfma( libxsmm_generated_code*    
                                                  i_gp_reg_mapping->gp_reg_b_prefetch,
                                                  LIBXSMM_X86_GP_REG_UNDEF, 0,
                                                  i_xgemm_desc->ldb * l_n * i_micro_kernel_config->datatype_size + (l_k /(b_pref_freq*8)) * i_micro_kernel_config->vector_length * i_micro_kernel_config->datatype_size );
+                libxsmm_x86_instruction_prefetch( io_generated_code,
+                                                 LIBXSMM_X86_INSTR_PREFETCHT0,
+                                                 i_gp_reg_mapping->gp_reg_c_prefetch,
+                                                 LIBXSMM_X86_GP_REG_UNDEF, 0,
+                                                 i_xgemm_desc->ldb * l_n * i_micro_kernel_config->datatype_size + (l_k /(b_pref_freq*8)) * i_micro_kernel_config->vector_length * i_micro_kernel_config->datatype_size );
               }
             } else {
               /* prefetch the remaining N/2 columns of B */
@@ -913,11 +918,16 @@ void libxsmm_generator_gemm_avx512_microkernel_qfma( libxsmm_generated_code*    
                                                  i_gp_reg_mapping->gp_reg_b_prefetch,
                                                  LIBXSMM_X86_GP_REG_UNDEF, 0,
                                                  i_xgemm_desc->ldb * l_n * i_micro_kernel_config->datatype_size + (l_k /(b_pref_freq*8))  * i_micro_kernel_config->vector_length * i_micro_kernel_config->datatype_size );
+                libxsmm_x86_instruction_prefetch( io_generated_code,
+                                                 LIBXSMM_X86_INSTR_PREFETCHT0,
+                                                 i_gp_reg_mapping->gp_reg_c_prefetch,
+                                                 LIBXSMM_X86_GP_REG_UNDEF, 0,
+                                                 i_xgemm_desc->ldb * l_n * i_micro_kernel_config->datatype_size + (l_k /(b_pref_freq*8))  * i_micro_kernel_config->vector_length * i_micro_kernel_config->datatype_size );
               }
             }
           }
         }
-
+#if 0
         if (i_xgemm_desc->prefetch & LIBXSMM_PREFETCH_CL1) {
           if ( l_k == 4 ) {
             libxsmm_x86_instruction_prefetch( io_generated_code,
@@ -927,6 +937,7 @@ void libxsmm_generator_gemm_avx512_microkernel_qfma( libxsmm_generated_code*    
                                              i_xgemm_desc->ldc * l_n * i_micro_kernel_config->datatype_size );
           }
         }
+#endif
       }
     }
     l_displacement_k_b+=4;
