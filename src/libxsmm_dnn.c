@@ -262,7 +262,10 @@ LIBXSMM_API_DEFINITION libxsmm_dnn_layer* libxsmm_dnn_create_conv_layer(
     /* @TODO we might want to fall back to direct convolution if winograd fails */
     if ( handle->algo == LIBXSMM_DNN_CONV_ALGO_WINOGRAD ) {
       *status = libxsmm_dnn_internal_create_conv_handle_winograd_check( handle );
-      if ( *status == LIBXSMM_DNN_WARN_FALLBACK ) handle->algo = LIBXSMM_DNN_CONV_ALGO_DIRECT;
+      if ( *status == LIBXSMM_DNN_WARN_FALLBACK ) {
+        handle->algo = LIBXSMM_DNN_CONV_ALGO_DIRECT;
+        *status = libxsmm_dnn_internal_create_conv_handle_direct( handle );
+      }
     }
     else if ( handle->algo == LIBXSMM_DNN_CONV_ALGO_DIRECT ) {
       *status = libxsmm_dnn_internal_create_conv_handle_direct( handle );
@@ -1546,7 +1549,7 @@ LIBXSMM_API_DEFINITION libxsmm_dnn_err_t libxsmm_dnn_bind_scratch(libxsmm_dnn_la
           /* we need a minibatch copy for transpose of input, scratch3 */
           if (handle->padding_flag == 1) {
             scratch5_size = handle->minibatch_scratch_size;
-          if (address % 64 == 0) {
+            if (address % 64 == 0) {
               handle->scratch5 = (void*)address;
             } else {
               offset = (64 - address % 64);
@@ -1571,6 +1574,8 @@ LIBXSMM_API_DEFINITION libxsmm_dnn_err_t libxsmm_dnn_bind_scratch(libxsmm_dnn_la
               offset = (64 - address % 64);
               handle->scratch4 = (void*)(address+offset);
             }
+            /* Initialize scratch4 to zero */
+            memset(handle->scratch4, 0, handle->scratch4_size);
           }
         } break;
         case LIBXSMM_DNN_COMPUTE_KIND_ALL: {
@@ -1610,6 +1615,8 @@ LIBXSMM_API_DEFINITION libxsmm_dnn_err_t libxsmm_dnn_bind_scratch(libxsmm_dnn_la
               offset = (64 - address % 64);
               handle->scratch4 = (void*)(address+offset);
             }
+            /* Initialize scratch4 to zero */
+            memset(handle->scratch4, 0, handle->scratch4_size);
             address += handle->scratch4_size + 64;
           }
           /* low precision intermediate buffer */
@@ -1947,7 +1954,7 @@ LIBXSMM_API_DEFINITION libxsmm_dnn_err_t libxsmm_dnn_transpose_filter(libxsmm_dn
   /* check that we are in FP32 */
   if ( handle->datatype == LIBXSMM_DNN_DATATYPE_F32 ) {
     LIBXSMM_VLA_DECL(6, float, wt, (float*)handle->reg_filter->data, handle->desc.S, handle->blocksifm, handle->ifmblock, handle->blocksofm, handle->ofmblock);
-    LIBXSMM_VLA_DECL(6, float, tr_wt, (float*)handle->scratch1, handle->desc.S, handle->blocksofm, handle->ofmblock, handle->blocksifm, handle->ifmblock);
+    LIBXSMM_VLA_DECL(6, float, tr_wt, (float*)handle->scratch1, handle->blocksifm, handle->desc.R, handle->desc.S, handle->ofmblock, handle->ifmblock);
 
     for (ofm1 = 0; ofm1 < handle->blocksofm; ++ofm1) {
       for (ifm1 = 0; ifm1 < handle->blocksifm; ++ifm1) {
@@ -1955,7 +1962,7 @@ LIBXSMM_API_DEFINITION libxsmm_dnn_err_t libxsmm_dnn_transpose_filter(libxsmm_dn
           for (ki=0; ki < handle->desc.S; ++ki) {
             for (ofm2 = 0; ofm2 < handle->ofmblock; ++ofm2) {
               for (ifm2 = 0; ifm2 < handle->ifmblock; ++ifm2) {
-                LIBXSMM_VLA_ACCESS(6, tr_wt, kj, ki, ofm1, ofm2, ifm1, ifm2, handle->desc.S, handle->blocksofm, handle->ofmblock, handle->blocksifm, handle->ifmblock) =
+                LIBXSMM_VLA_ACCESS(6, tr_wt, ofm1, ifm1, kj, ki, ofm2, ifm2, handle->blocksifm, handle->desc.R, handle->desc.S, handle->ofmblock, handle->ifmblock) =
                   LIBXSMM_VLA_ACCESS(6, wt,  kj, ki, ifm1, ifm2, ofm1, ofm2, handle->desc.S, handle->blocksifm, handle->ifmblock, handle->blocksofm, handle->ofmblock);
               }
             }
