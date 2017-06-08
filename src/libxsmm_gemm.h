@@ -51,6 +51,14 @@
 # pragma offload_attribute(pop)
 #endif
 
+#if !defined(LIBXSMM_GEMM_CONST)
+# if defined(LIBXSMM_GEMM_NONCONST) || defined(__OPENBLAS)
+#   define LIBXSMM_GEMM_CONST
+# else
+#   define LIBXSMM_GEMM_CONST const
+# endif
+#endif
+
 /** Undefine (disarm) MKL's DIRECT_CALL macros. */
 #if defined(MKL_DIRECT_CALL_SEQ) || defined(MKL_DIRECT_CALL)
 # if defined(sgemm_)
@@ -270,8 +278,17 @@
 
 #if (!defined(__BLAS) || (0 != __BLAS))
 # define LIBXSMM_GEMM_WRAPPER_BLAS(TYPE, ORIGINAL, CALLER, SYMBOL) if (0 == (ORIGINAL)) { \
-    union { const void* pv; LIBXSMM_GEMMFUNCTION_TYPE(TYPE) pf; } libxsmm_gemm_wrapper_blas_; \
-    libxsmm_gemm_wrapper_blas_.pf = (SYMBOL); \
+    union { const void* pv; LIBXSMM_GEMMFUNCTION_TYPE(TYPE) pf; \
+      void (*sf)(LIBXSMM_GEMM_CONST char*, LIBXSMM_GEMM_CONST char*, \
+        LIBXSMM_GEMM_CONST LIBXSMM_BLASINT*, LIBXSMM_GEMM_CONST LIBXSMM_BLASINT*, LIBXSMM_GEMM_CONST LIBXSMM_BLASINT*, \
+        LIBXSMM_GEMM_CONST float*, LIBXSMM_GEMM_CONST float*, LIBXSMM_GEMM_CONST LIBXSMM_BLASINT*, LIBXSMM_GEMM_CONST float*, LIBXSMM_GEMM_CONST LIBXSMM_BLASINT*, \
+        LIBXSMM_GEMM_CONST float*, float*, LIBXSMM_GEMM_CONST LIBXSMM_BLASINT*); \
+      void (*df)( \
+        LIBXSMM_GEMM_CONST char*, LIBXSMM_GEMM_CONST char*, LIBXSMM_GEMM_CONST LIBXSMM_BLASINT*, LIBXSMM_GEMM_CONST LIBXSMM_BLASINT*, LIBXSMM_GEMM_CONST LIBXSMM_BLASINT*, \
+        LIBXSMM_GEMM_CONST double*, LIBXSMM_GEMM_CONST double*, LIBXSMM_GEMM_CONST LIBXSMM_BLASINT*, LIBXSMM_GEMM_CONST double*, LIBXSMM_GEMM_CONST LIBXSMM_BLASINT*, \
+        LIBXSMM_GEMM_CONST double*, double*, LIBXSMM_GEMM_CONST LIBXSMM_BLASINT*); \
+    } libxsmm_gemm_wrapper_blas_; \
+    libxsmm_gemm_wrapper_blas_.LIBXSMM_TPREFIX(TYPE,f) = (SYMBOL); \
     if (libxsmm_gemm_wrapper_blas_.pv != (CALLER)) ORIGINAL = libxsmm_gemm_wrapper_blas_.pf; \
   }
 #else
@@ -343,44 +360,46 @@ LIBXSMM_API int libxsmm_gemm_stat(libxsmm_gemm_precision precision, const void* 
   libxsmm_blasint m, libxsmm_blasint n, const libxsmm_blasint* ld, libxsmm_stat_info* stat);
 
 #if defined(LIBXSMM_GEMM_WRAP_STATIC)
-LIBXSMM_EXTERN LIBXSMM_RETARGETABLE void LIBXSMM_FSYMBOL(__real_sgemm)(
+LIBXSMM_API void LIBXSMM_FSYMBOL(__real_sgemm)(
   const char*, const char*, const libxsmm_blasint*, const libxsmm_blasint*, const libxsmm_blasint*,
   const float*, const float*, const libxsmm_blasint*, const float* b, const libxsmm_blasint*,
   const float*, float*, const libxsmm_blasint*);
-LIBXSMM_EXTERN LIBXSMM_RETARGETABLE void LIBXSMM_FSYMBOL(__real_dgemm)(
+LIBXSMM_API void LIBXSMM_FSYMBOL(__real_dgemm)(
   const char*, const char*, const libxsmm_blasint*, const libxsmm_blasint*, const libxsmm_blasint*,
   const double*, const double*, const libxsmm_blasint*, const double* b, const libxsmm_blasint*,
   const double*, double*, const libxsmm_blasint*);
 #endif /*defined(LIBXSMM_GEMM_WRAP_STATIC)*/
 
 #if defined(LIBXSMM_BUILD) && defined(LIBXSMM_BUILD_EXT)
-LIBXSMM_EXTERN LIBXSMM_RETARGETABLE void LIBXSMM_FSYMBOL(__wrap_sgemm)(
+LIBXSMM_API void LIBXSMM_FSYMBOL(__wrap_sgemm)(
   const char*, const char*, const libxsmm_blasint*, const libxsmm_blasint*, const libxsmm_blasint*,
   const float*, const float*, const libxsmm_blasint*, const float* b, const libxsmm_blasint*,
   const float*, float*, const libxsmm_blasint*);
-LIBXSMM_EXTERN LIBXSMM_RETARGETABLE void LIBXSMM_FSYMBOL(__wrap_dgemm)(
+LIBXSMM_API void LIBXSMM_FSYMBOL(__wrap_dgemm)(
   const char*, const char*, const libxsmm_blasint*, const libxsmm_blasint*, const libxsmm_blasint*,
   const double*, const double*, const libxsmm_blasint*, const double* b, const libxsmm_blasint*,
   const double*, double*, const libxsmm_blasint*);
 #endif
 
-LIBXSMM_EXTERN LIBXSMM_RETARGETABLE void LIBXSMM_FSYMBOL(sgemm)(
-  const char*, const char*, const libxsmm_blasint*, const libxsmm_blasint*, const libxsmm_blasint*,
-  const float*, const float*, const libxsmm_blasint*, const float*, const libxsmm_blasint*,
-  const float*, float*, const libxsmm_blasint*);
-LIBXSMM_EXTERN LIBXSMM_RETARGETABLE void LIBXSMM_FSYMBOL(dgemm)(
-  const char*, const char*, const libxsmm_blasint*, const libxsmm_blasint*, const libxsmm_blasint*,
-  const double*, const double*, const libxsmm_blasint*, const double*, const libxsmm_blasint*,
-  const double*, double*, const libxsmm_blasint*);
+LIBXSMM_API_EXTERN void LIBXSMM_FSYMBOL(sgemm)(LIBXSMM_GEMM_CONST char*, LIBXSMM_GEMM_CONST char*,
+  LIBXSMM_GEMM_CONST libxsmm_blasint*, LIBXSMM_GEMM_CONST libxsmm_blasint*, LIBXSMM_GEMM_CONST libxsmm_blasint*,
+  LIBXSMM_GEMM_CONST float*, LIBXSMM_GEMM_CONST float*, LIBXSMM_GEMM_CONST libxsmm_blasint*,
+  LIBXSMM_GEMM_CONST float*, LIBXSMM_GEMM_CONST libxsmm_blasint*,
+  LIBXSMM_GEMM_CONST float*, float*, LIBXSMM_GEMM_CONST libxsmm_blasint*);
+LIBXSMM_API_EXTERN void LIBXSMM_FSYMBOL(dgemm)(LIBXSMM_GEMM_CONST char*, LIBXSMM_GEMM_CONST char*,
+  LIBXSMM_GEMM_CONST libxsmm_blasint*, LIBXSMM_GEMM_CONST libxsmm_blasint*, LIBXSMM_GEMM_CONST libxsmm_blasint*,
+  LIBXSMM_GEMM_CONST double*, LIBXSMM_GEMM_CONST double*, LIBXSMM_GEMM_CONST libxsmm_blasint*,
+  LIBXSMM_GEMM_CONST double*, LIBXSMM_GEMM_CONST libxsmm_blasint*,
+  LIBXSMM_GEMM_CONST double*, double*, LIBXSMM_GEMM_CONST libxsmm_blasint*);
 
 /** Configuration table containing the tile sizes separate for DP and SP. */
-LIBXSMM_EXTERN_C LIBXSMM_RETARGETABLE unsigned int libxsmm_gemm_tile[2/*DP/SP*/][3/*M,N,K*/][8/*size-range*/];
+LIBXSMM_API_VARIABLE unsigned int libxsmm_gemm_tile[2/*DP/SP*/][3/*M,N,K*/][8/*size-range*/];
 /** Determines the prefetch strategy, which is used in case of LIBXSMM_PREFETCH_AUTO. */
-LIBXSMM_EXTERN_C LIBXSMM_RETARGETABLE int libxsmm_gemm_auto_prefetch;
+LIBXSMM_API_VARIABLE int libxsmm_gemm_auto_prefetch;
 /** Prefetch strategy for tiled GEMM. */
-LIBXSMM_EXTERN_C LIBXSMM_RETARGETABLE int libxsmm_gemm_tiled_prefetch;
+LIBXSMM_API_VARIABLE int libxsmm_gemm_tiled_prefetch;
 /** Intercepted GEMM (1: sequential and non-tiled, 2: parallelized and tiled). */
-LIBXSMM_EXTERN_C LIBXSMM_RETARGETABLE int libxsmm_gemm_wrap;
+LIBXSMM_API_VARIABLE int libxsmm_gemm_wrap;
 
 #endif /*LIBXSMM_GEMM_H*/
 

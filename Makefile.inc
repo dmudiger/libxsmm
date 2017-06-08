@@ -756,6 +756,12 @@ else # GCC assumed
       CXXFLAGS += -funroll-loops -ftree-vectorize
       CFLAGS += -funroll-loops -ftree-vectorize
       FCFLAGS += -funroll-loops -ftree-vectorize
+      ifneq (Darwin,$(UNAME))
+        CXXFLAGS += -fdata-sections -ffunction-sections
+        CFLAGS += -fdata-sections -ffunction-sections
+        FCFLAGS += -fdata-sections -ffunction-sections
+        LDFLAGS += -Wl,--gc-sections
+      endif
       ifneq (0,$(GCC))
         CXXFLAGS += -ffast-math
         CFLAGS += -ffast-math
@@ -776,6 +782,7 @@ else # GCC assumed
       CXXFLAGS += -flto -ffat-lto-objects
       CFLAGS += -flto -ffat-lto-objects
       FCFLAGS += -flto -ffat-lto-objects
+      FLDFLAGS += -fno-lto
       LDFLAGS += -flto
     endif
     ifneq (0,$(INSTRUMENT))
@@ -948,22 +955,22 @@ ifneq (undefined,$(origin TARGET))
 endif
 
 # check target flags by feeding an ad-hoc C program into the compiler
-ifneq (0,$(shell CINFILE=$$(mktemp checkXXXXXX.c); \
+ifneq (0,$(shell CINFILE=$$(mktemp /tmp/.libxsmm_XXXXXX.c); \
   echo "int main(void) { return 0; }" > $${CINFILE}; \
   CTEST=$$($(CC) $(CTARGET) -c $${CINFILE} 2>&1); \
   if [ "" = "$${CTEST}" ]; then echo $$?; else echo 1; fi; \
-  rm -f check??????.c check??????.o*))
+  rm -f /tmp/.libxsmm_??????.c .libxsmm_??????.o* 2> /dev/null))
 # revoke target flags
   CTARGET = $(NULL)
 endif
 
 ifneq (,$(strip $(FC))) # check target flags by feeding an ad-hoc Fortran program into the compiler
-ifeq (0,$(shell FINFILE=$$(mktemp checkXXXXXX.f); \
+ifeq (0,$(shell FINFILE=$$(mktemp /tmp/.libxsmm_XXXXXX.f); \
   echo "      PROGRAM test" > $${FINFILE}; \
   echo "      END PROGRAM" >> $${FINFILE}; \
   FTEST=$$($(FC) $(CTARGET) -c $${FINFILE} 2>&1); \
   if [ "" = "$${FTEST}" ]; then echo $$?; else echo 1; fi; \
-  rm -f check??????.f check??????.o*))
+  rm -f /tmp/.libxsmm_??????.f .libxsmm_??????.o* 2> /dev/null))
 # inherit CTARGET flags
   FTARGET = $(CTARGET)
 endif
@@ -976,7 +983,11 @@ ifneq (0,$(THREADS))
     CFLAGS += -pthread
     FLDFLAGS += -lpthread
     ifneq (Windows_NT,$(UNAME))
-      CLDFLAGS += -pthread
+      ifneq (Darwin,$(UNAME))
+        CLDFLAGS += -pthread
+      else ifeq (0,$(CLANG))
+        CLDFLAGS += -pthread
+      endif
     endif
   endif
 else

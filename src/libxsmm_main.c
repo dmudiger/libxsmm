@@ -140,8 +140,8 @@ typedef struct LIBXSMM_RETARGETABLE internal_statistic_type {
   const int internal_dispatch_main_lda_ = (0 == LIBXSMM_LD(PLDA, PLDB) ? LIBXSMM_LD(M, N) : *LIBXSMM_LD(PLDA, PLDB)); \
   const int internal_dispatch_main_ldb_ = (0 == LIBXSMM_LD(PLDB, PLDA) ? (K) : *LIBXSMM_LD(PLDB, PLDA)); \
   const int internal_dispatch_main_ldc_ = (0 == (PLDC) ? LIBXSMM_LD(M, N) : *(PLDC)); \
-  const TYPE internal_dispatch_main_alpha_ = (0 == (PALPHA) ? ((TYPE)LIBXSMM_ALPHA) : *(PALPHA)); \
-  const TYPE internal_dispatch_main_beta_ = (0 == (PBETA) ? ((TYPE)LIBXSMM_BETA) : *(PBETA)); \
+  const TYPE internal_dispatch_main_alpha_ = (TYPE)(0 == (PALPHA) ? (LIBXSMM_ALPHA) : *(PALPHA)); \
+  const TYPE internal_dispatch_main_beta_ = (TYPE)(0 == (PBETA) ? (LIBXSMM_BETA) : *(PBETA)); \
   if (LIBXSMM_GEMM_NO_BYPASS(internal_dispatch_main_flags_, internal_dispatch_main_alpha_, internal_dispatch_main_beta_) && \
     LIBXSMM_GEMM_NO_BYPASS_DIMS(internal_dispatch_main_lda_, internal_dispatch_main_ldb_, internal_dispatch_main_ldc_) && \
     LIBXSMM_GEMM_NO_BYPASS_DIMS(M, N, K)) \
@@ -163,21 +163,21 @@ typedef struct LIBXSMM_RETARGETABLE internal_statistic_type {
 
 #if !defined(LIBXSMM_NO_SYNC)
 # define INTERNAL_REGLOCK_MAXN 256
-LIBXSMM_EXTERN_C LIBXSMM_RETARGETABLE LIBXSMM_LOCK_TYPE internal_reglock[INTERNAL_REGLOCK_MAXN];
+LIBXSMM_API_VARIABLE LIBXSMM_LOCK_TYPE internal_reglock[INTERNAL_REGLOCK_MAXN];
 #endif
 
 /** Determines the try-lock property (1<N: off, N=1: enabled). */
-LIBXSMM_EXTERN_C LIBXSMM_RETARGETABLE int internal_reglock_count;
-LIBXSMM_EXTERN_C LIBXSMM_RETARGETABLE size_t internal_registry_nbytes;
-LIBXSMM_EXTERN_C LIBXSMM_RETARGETABLE internal_regkey_type* internal_registry_keys;
-LIBXSMM_EXTERN_C LIBXSMM_RETARGETABLE libxsmm_code_pointer* internal_registry;
-LIBXSMM_EXTERN_C LIBXSMM_RETARGETABLE internal_statistic_type internal_statistic[2/*DP/SP*/][4/*sml/med/big/xxx*/];
-LIBXSMM_EXTERN_C LIBXSMM_RETARGETABLE unsigned int internal_statistic_sml, internal_statistic_med, internal_statistic_mnk;
-LIBXSMM_EXTERN_C LIBXSMM_RETARGETABLE unsigned int internal_statistic_num_mcopy, internal_statistic_num_tcopy;
-LIBXSMM_EXTERN_C LIBXSMM_RETARGETABLE unsigned int internal_teardown;
-LIBXSMM_EXTERN_C LIBXSMM_RETARGETABLE int internal_dispatch_trylock_locked;
-LIBXSMM_EXTERN_C LIBXSMM_RETARGETABLE int internal_gemm_auto_prefetch_locked;
-LIBXSMM_EXTERN_C LIBXSMM_RETARGETABLE int internal_gemm_auto_prefetch;
+LIBXSMM_API_VARIABLE int internal_reglock_count;
+LIBXSMM_API_VARIABLE size_t internal_registry_nbytes;
+LIBXSMM_API_VARIABLE internal_regkey_type* internal_registry_keys;
+LIBXSMM_API_VARIABLE libxsmm_code_pointer* internal_registry;
+LIBXSMM_API_VARIABLE internal_statistic_type internal_statistic[2/*DP/SP*/][4/*sml/med/big/xxx*/];
+LIBXSMM_API_VARIABLE unsigned int internal_statistic_sml, internal_statistic_med, internal_statistic_mnk;
+LIBXSMM_API_VARIABLE unsigned int internal_statistic_num_mcopy, internal_statistic_num_tcopy;
+LIBXSMM_API_VARIABLE unsigned int internal_teardown;
+LIBXSMM_API_VARIABLE int internal_dispatch_trylock_locked;
+LIBXSMM_API_VARIABLE int internal_gemm_auto_prefetch_locked;
+LIBXSMM_API_VARIABLE int internal_gemm_auto_prefetch;
 
 
 LIBXSMM_API_DEFINITION unsigned int libxsmm_update_mmstatistic(int datatype, int m, int n, int k, unsigned int ntry, unsigned int ncol)
@@ -912,8 +912,8 @@ LIBXSMM_API_DEFINITION const char* internal_get_typename(int datatype)
 }
 
 
-LIBXSMM_API const char* internal_get_typepostfix(size_t typesize);
-LIBXSMM_API_DEFINITION const char* internal_get_typepostfix(size_t typesize)
+LIBXSMM_API const char* internal_get_typesizename(size_t typesize);
+LIBXSMM_API_DEFINITION const char* internal_get_typesizename(size_t typesize)
 {
   static LIBXSMM_TLS char result[4];
   assert(256 > typesize);
@@ -962,9 +962,9 @@ LIBXSMM_API_DEFINITION int libxsmm_build(const libxsmm_build_request* request, u
 # endif
         {
           const int uid = libxsmm_gemm_prefetch2uid((libxsmm_gemm_prefetch_type)request->descriptor.gemm->prefetch);
+          const char *const tname = internal_get_typename(request->descriptor.gemm->datatype);
           /* adopt scheme which allows kernel names of LIBXSMM to appear in order (Intel VTune, etc.) */
-          LIBXSMM_SNPRINTF(jit_name, sizeof(jit_name), "libxsmm_%s_%s_%c%c_%ux%ux%u_%u_%u_%u_a%i_b%i_p%i.mxm",
-            target_arch/*code path name*/, internal_get_typename(request->descriptor.gemm->datatype),
+          LIBXSMM_SNPRINTF(jit_name, sizeof(jit_name), "libxsmm_%s_%s_%c%c_%ux%ux%u_%u_%u_%u_a%i_b%i_p%i.mxm", target_arch, tname,
             0 == (LIBXSMM_GEMM_FLAG_TRANS_A & request->descriptor.gemm->flags) ? 'n' : 't',
             0 == (LIBXSMM_GEMM_FLAG_TRANS_B & request->descriptor.gemm->flags) ? 'n' : 't',
             (unsigned int)request->descriptor.gemm->m,   (unsigned int)request->descriptor.gemm->n,   (unsigned int)request->descriptor.gemm->k,
@@ -985,9 +985,9 @@ LIBXSMM_API_DEFINITION int libxsmm_build(const libxsmm_build_request* request, u
 # endif
         {
           const int uid = libxsmm_gemm_prefetch2uid((libxsmm_gemm_prefetch_type)request->descriptor.ssoa->gemm->prefetch);
+          const char *const tname = internal_get_typename(request->descriptor.ssoa->gemm->datatype);
           /* adopt scheme which allows kernel names of LIBXSMM to appear in order (Intel VTune, etc.) */
-          LIBXSMM_SNPRINTF(jit_name, sizeof(jit_name), "libxsmm_%s_%s_%c%c_%ux%ux%u_%u_%u_%u_a%i_b%i_p%i_nnz%i.ssoa",
-            target_arch/*code path name*/, internal_get_typename(request->descriptor.ssoa->gemm->datatype),
+          LIBXSMM_SNPRINTF(jit_name, sizeof(jit_name), "libxsmm_%s_%s_%c%c_%ux%ux%u_%u_%u_%u_a%i_b%i_p%i_nnz%u.ssoa", target_arch, tname,
             0 == (LIBXSMM_GEMM_FLAG_TRANS_A & request->descriptor.ssoa->gemm->flags) ? 'n' : 't',
             0 == (LIBXSMM_GEMM_FLAG_TRANS_B & request->descriptor.ssoa->gemm->flags) ? 'n' : 't',
             (unsigned int)request->descriptor.ssoa->gemm->m,   (unsigned int)request->descriptor.ssoa->gemm->n,   (unsigned int)request->descriptor.ssoa->gemm->k,
@@ -1010,9 +1010,9 @@ LIBXSMM_API_DEFINITION int libxsmm_build(const libxsmm_build_request* request, u
 # endif
         {
           const int uid = libxsmm_gemm_prefetch2uid((libxsmm_gemm_prefetch_type)request->descriptor.ssoa->gemm->prefetch);
+          const char *const tname = internal_get_typename(request->descriptor.sreg->gemm->datatype);
           /* adopt scheme which allows kernel names of LIBXSMM to appear in order (Intel VTune, etc.) */
-          LIBXSMM_SNPRINTF(jit_name, sizeof(jit_name), "libxsmm_%s_%s_%c%c_%ux%ux%u_%u_%u_%u_a%i_b%i_p%i.sreg",
-            target_arch/*code path name*/, internal_get_typename(request->descriptor.sreg->gemm->datatype),
+          LIBXSMM_SNPRINTF(jit_name, sizeof(jit_name), "libxsmm_%s_%s_%c%c_%ux%ux%u_%u_%u_%u_a%i_b%i_p%i.sreg", target_arch, tname,
             0 == (LIBXSMM_GEMM_FLAG_TRANS_A & request->descriptor.sreg->gemm->flags) ? 'n' : 't',
             0 == (LIBXSMM_GEMM_FLAG_TRANS_B & request->descriptor.sreg->gemm->flags) ? 'n' : 't',
             (unsigned int)request->descriptor.sreg->gemm->m,   (unsigned int)request->descriptor.sreg->gemm->n,   (unsigned int)request->descriptor.sreg->gemm->k,
@@ -1193,9 +1193,9 @@ LIBXSMM_API_DEFINITION int libxsmm_build(const libxsmm_build_request* request, u
         if (0 > libxsmm_verbosity)
 # endif
         {
+          const char *const tsizename = internal_get_typesizename(request->descriptor.matcopy->typesize);
           /* adopt scheme which allows kernel names of LIBXSMM to appear in order (Intel VTune, etc.) */
-          LIBXSMM_SNPRINTF(jit_name, sizeof(jit_name), "libxsmm_%s_tsize%s_%ux%u_%ux%u_p%u.mcopy",
-            target_arch/*code path name*/, internal_get_typepostfix(request->descriptor.matcopy->typesize),
+          LIBXSMM_SNPRINTF(jit_name, sizeof(jit_name), "libxsmm_%s_tsize%s_%ux%u_%ux%u_p%u.mcopy", target_arch, tsizename,
             request->descriptor.matcopy->m, request->descriptor.matcopy->n,
             request->descriptor.matcopy->ldi, request->descriptor.matcopy->ldo,
             (unsigned int)request->descriptor.matcopy->prefetch);
@@ -1210,9 +1210,9 @@ LIBXSMM_API_DEFINITION int libxsmm_build(const libxsmm_build_request* request, u
         if (0 > libxsmm_verbosity)
 # endif
         {
+          const char *const tsizename = internal_get_typesizename(request->descriptor.trans->typesize);
           /* adopt scheme which allows kernel names of LIBXSMM to appear in order (Intel VTune, etc.) */
-          LIBXSMM_SNPRINTF(jit_name, sizeof(jit_name), "libxsmm_%s_tsize%s_%ux%u.trans",
-            target_arch/*code path name*/, internal_get_typepostfix(request->descriptor.trans->typesize),
+          LIBXSMM_SNPRINTF(jit_name, sizeof(jit_name), "libxsmm_%s_tsize%s_%ux%u.trans", target_arch, tsizename,
             request->descriptor.trans->m, request->descriptor.trans->n);
         }
       }

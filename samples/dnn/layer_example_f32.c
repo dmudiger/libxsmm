@@ -414,7 +414,7 @@ int main(int argc, char* argv[])
   float *naive_input, *naive_output, *naive_output_save, *naive_filter, *naive_filter_wu, *naive_output_bp, *naive_output_wu, *naive_libxsmm_output;
   float *naive_libxsmm_input, *naive_libxsmm_filter, *naive_input_save, *naive_filter_save, *naive_filter_kcrs;
   float *input_nhwc, *output_nhwc, *filter_rsck, *naive_output_nhwc, *naive_input_nhwc;
-  float *input_libxsmm, *filter_libxsmm, *output_libxsmm;
+  float *input_libxsmm, *filter_libxsmm, *output_libxsmm, *dinput_libxsmm, *dfilter_libxsmm, *doutput_libxsmm;
   int ifhp, ifwp, ofhp, ofwp, ofh, ofw;
   int stride_h, stride_w, pad_h, pad_w, pad_h_in, pad_w_in, pad_h_out, pad_w_out;
   naive_conv_t naive_param;
@@ -452,6 +452,9 @@ int main(int argc, char* argv[])
   libxsmm_dnn_buffer* libxsmm_input;
   libxsmm_dnn_buffer* libxsmm_output;
   libxsmm_dnn_filter* libxsmm_filter;
+  libxsmm_dnn_buffer* libxsmm_dinput;
+  libxsmm_dnn_buffer* libxsmm_doutput;
+  libxsmm_dnn_filter* libxsmm_dfilter;
   libxsmm_dnn_err_t status;
 
   memset(&norms_fwd, 0, sizeof(norms_fwd));
@@ -545,6 +548,9 @@ int main(int argc, char* argv[])
   printf("SIZE Input   (1): %10.2f MiB\n", (double)(1*nIfm*ifhp*ifwp*   sizeof(float))/(1024.0*1024.0) );
   printf("SIZE Output  (1): %10.2f MiB\n", (double)(1*nOfm*ofhp*ofwp*   sizeof(float))/(1024.0*1024.0) );
   printf("SIZE Weight     : %10.2f MiB\n", (double)(nIfm*nOfm*kw*kh*    sizeof(float))/(1024.0*1024.0) );
+#if defined(USE_OVERWRITE)
+  printf("Using Overwrite Option\n");
+#endif
 
   /* allocate data */
   naive_input           = (float*)libxsmm_aligned_malloc( nImg*nIfm*ifhp*ifwp*sizeof(float), 2097152);
@@ -568,6 +574,9 @@ int main(int argc, char* argv[])
   input_libxsmm         = (float*)libxsmm_aligned_malloc( nImg*nIfm*ifhp*ifwp*sizeof(float), 2097152);
   filter_libxsmm        = (float*)libxsmm_aligned_malloc( nOfm*nIfm*kh*kw*    sizeof(float), 2097152);
   output_libxsmm        = (float*)libxsmm_aligned_malloc( nImg*nOfm*ofhp*ofwp*sizeof(float), 2097152);
+  dinput_libxsmm        = (float*)libxsmm_aligned_malloc( nImg*nIfm*ifhp*ifwp*sizeof(float), 2097152);
+  dfilter_libxsmm       = (float*)libxsmm_aligned_malloc( nOfm*nIfm*kh*kw*    sizeof(float), 2097152);
+  doutput_libxsmm       = (float*)libxsmm_aligned_malloc( nImg*nOfm*ofhp*ofwp*sizeof(float), 2097152);
 
   /* initialize data */
   init_buf(naive_input,          nImg*nIfm*ifhp*ifwp, 0, 0);
@@ -635,8 +644,8 @@ int main(int argc, char* argv[])
     conv_desc.pad_h_out = pad_h_out;
     conv_desc.pad_w_out = pad_w_out;
     conv_desc.threads = nThreads;
-    /*conv_desc.algo = LIBXSMM_DNN_CONV_ALGO_AUTO;*/
-    conv_desc.algo = LIBXSMM_DNN_CONV_ALGO_DIRECT;
+    conv_desc.algo = LIBXSMM_DNN_CONV_ALGO_AUTO;
+    /*conv_desc.algo = LIBXSMM_DNN_CONV_ALGO_DIRECT;*/
     conv_desc.buffer_format = LIBXSMM_DNN_TENSOR_FORMAT_LIBXSMM;
     conv_desc.filter_format = LIBXSMM_DNN_TENSOR_FORMAT_LIBXSMM;
     conv_desc.fuse_ops = LIBXSMM_DNN_CONV_FUSE_NONE;
@@ -661,6 +670,12 @@ int main(int argc, char* argv[])
     CHKERR_LIBXSMM_DNN( status );
     libxsmm_filter = libxsmm_dnn_link_filter( libxsmm_handle, LIBXSMM_DNN_FILTER, filter_libxsmm, LIBXSMM_DNN_TENSOR_FORMAT_LIBXSMM_PTR, &status );
     CHKERR_LIBXSMM_DNN( status );
+    libxsmm_dinput = libxsmm_dnn_link_buffer( libxsmm_handle, LIBXSMM_DNN_INPUT, dinput_libxsmm, LIBXSMM_DNN_TENSOR_FORMAT_LIBXSMM_PTR, &status );
+    CHKERR_LIBXSMM_DNN( status );
+    libxsmm_doutput = libxsmm_dnn_link_buffer( libxsmm_handle, LIBXSMM_DNN_OUTPUT, doutput_libxsmm, LIBXSMM_DNN_TENSOR_FORMAT_LIBXSMM_PTR, &status );
+    CHKERR_LIBXSMM_DNN( status );
+    libxsmm_dfilter = libxsmm_dnn_link_filter( libxsmm_handle, LIBXSMM_DNN_FILTER, dfilter_libxsmm, LIBXSMM_DNN_TENSOR_FORMAT_LIBXSMM_PTR, &status );
+    CHKERR_LIBXSMM_DNN( status );
 
     /* copy in data to LIBXSMM format */
     /* we can also use the layout functions and set the data on our
@@ -671,11 +686,11 @@ int main(int argc, char* argv[])
 
     /* bind buffers and filter to handle */
     CHKERR_LIBXSMM_DNN( libxsmm_dnn_bind_buffer( libxsmm_handle, libxsmm_input, LIBXSMM_DNN_REGULAR_INPUT ) );
-    CHKERR_LIBXSMM_DNN( libxsmm_dnn_bind_buffer( libxsmm_handle, libxsmm_input, LIBXSMM_DNN_GRADIENT_INPUT ) );
+    CHKERR_LIBXSMM_DNN( libxsmm_dnn_bind_buffer( libxsmm_handle, libxsmm_dinput, LIBXSMM_DNN_GRADIENT_INPUT ) );
     CHKERR_LIBXSMM_DNN( libxsmm_dnn_bind_buffer( libxsmm_handle, libxsmm_output, LIBXSMM_DNN_REGULAR_OUTPUT ) );
-    CHKERR_LIBXSMM_DNN( libxsmm_dnn_bind_buffer( libxsmm_handle, libxsmm_output, LIBXSMM_DNN_GRADIENT_OUTPUT ) );
+    CHKERR_LIBXSMM_DNN( libxsmm_dnn_bind_buffer( libxsmm_handle, libxsmm_doutput, LIBXSMM_DNN_GRADIENT_OUTPUT ) );
     CHKERR_LIBXSMM_DNN( libxsmm_dnn_bind_filter( libxsmm_handle, libxsmm_filter, LIBXSMM_DNN_REGULAR_FILTER ) );
-    CHKERR_LIBXSMM_DNN( libxsmm_dnn_bind_filter( libxsmm_handle, libxsmm_filter, LIBXSMM_DNN_GRADIENT_FILTER ) );
+    CHKERR_LIBXSMM_DNN( libxsmm_dnn_bind_filter( libxsmm_handle, libxsmm_dfilter, LIBXSMM_DNN_GRADIENT_FILTER ) );
     /* let's allocate and bind scratch */
     scratch = (void*)libxsmm_aligned_malloc( libxsmm_dnn_get_scratch_size( libxsmm_handle, LIBXSMM_DNN_COMPUTE_KIND_ALL, &status ), 2097152);
     CHKERR_LIBXSMM_DNN( status );
@@ -714,8 +729,8 @@ int main(int argc, char* argv[])
       printf("#   Correctness - BWD (custom-Storage)   #\n");
       printf("##########################################\n");
       /* let's do some additional init such that we can run passes standalone */
-      CHKERR_LIBXSMM_DNN( libxsmm_dnn_copyin_buffer( libxsmm_output, (void*)naive_output_bp, LIBXSMM_DNN_TENSOR_FORMAT_NCHW ) );
-      CHKERR_LIBXSMM_DNN( libxsmm_dnn_zero_buffer( libxsmm_input ) );
+      CHKERR_LIBXSMM_DNN( libxsmm_dnn_copyin_buffer( libxsmm_doutput, (void*)naive_output_bp, LIBXSMM_DNN_TENSOR_FORMAT_NCHW ) );
+      CHKERR_LIBXSMM_DNN( libxsmm_dnn_zero_buffer( libxsmm_dinput ) );
       /* run LIBXSMM convolutions */
 #if defined(_OPENMP)
 # pragma omp parallel
@@ -729,7 +744,7 @@ int main(int argc, char* argv[])
         CHKERR_LIBXSMM_DNN( libxsmm_dnn_execute_st( libxsmm_handle, LIBXSMM_DNN_COMPUTE_KIND_BWD, 0, tid ) );
       }
       /* copy out data */
-      CHKERR_LIBXSMM_DNN( libxsmm_dnn_copyout_buffer( libxsmm_input, (void*)naive_libxsmm_input, LIBXSMM_DNN_TENSOR_FORMAT_NCHW ) );
+      CHKERR_LIBXSMM_DNN( libxsmm_dnn_copyout_buffer( libxsmm_dinput, (void*)naive_libxsmm_input, LIBXSMM_DNN_TENSOR_FORMAT_NCHW ) );
 
       /* compare */
       compare_buf(naive_input, naive_libxsmm_input, nImg*nIfm*ifhp*ifwp, &norms_bwd);
@@ -746,8 +761,8 @@ int main(int argc, char* argv[])
       printf("##########################################\n");
       /* let's do some additional init such that we can run passes standalone */
       CHKERR_LIBXSMM_DNN( libxsmm_dnn_copyin_buffer( libxsmm_input, (void*)naive_input_save, LIBXSMM_DNN_TENSOR_FORMAT_NCHW ) );
-      CHKERR_LIBXSMM_DNN( libxsmm_dnn_copyin_buffer( libxsmm_output, (void*)naive_output_wu, LIBXSMM_DNN_TENSOR_FORMAT_NCHW ) );
-      CHKERR_LIBXSMM_DNN( libxsmm_dnn_zero_filter( libxsmm_filter ) );
+      CHKERR_LIBXSMM_DNN( libxsmm_dnn_copyin_buffer( libxsmm_doutput, (void*)naive_output_wu, LIBXSMM_DNN_TENSOR_FORMAT_NCHW ) );
+      CHKERR_LIBXSMM_DNN( libxsmm_dnn_zero_filter( libxsmm_dfilter ) );
       /* run LIBXSMM convolutions */
 #if defined(_OPENMP)
 # pragma omp parallel
@@ -764,7 +779,7 @@ int main(int argc, char* argv[])
         CHKERR_LIBXSMM_DNN( libxsmm_dnn_reduce_wu_filters( libxsmm_handle, LIBXSMM_DNN_GRADIENT_FILTER ) );
       }
       /* copy out data */
-      CHKERR_LIBXSMM_DNN( libxsmm_dnn_copyout_filter( libxsmm_filter, (void*)naive_libxsmm_filter, LIBXSMM_DNN_TENSOR_FORMAT_KCRS ) );
+      CHKERR_LIBXSMM_DNN( libxsmm_dnn_copyout_filter( libxsmm_dfilter, (void*)naive_libxsmm_filter, LIBXSMM_DNN_TENSOR_FORMAT_KCRS ) );
 
       /* compare */
       compare_buf(naive_filter_wu, naive_libxsmm_filter, nOfm*nIfm*kh*kw, &norms_upd);
@@ -886,6 +901,9 @@ int main(int argc, char* argv[])
     CHKERR_LIBXSMM_DNN( libxsmm_dnn_destroy_buffer( libxsmm_input ) );
     CHKERR_LIBXSMM_DNN( libxsmm_dnn_destroy_buffer( libxsmm_output ) );
     CHKERR_LIBXSMM_DNN( libxsmm_dnn_destroy_filter( libxsmm_filter ) );
+    CHKERR_LIBXSMM_DNN( libxsmm_dnn_destroy_buffer( libxsmm_dinput ) );
+    CHKERR_LIBXSMM_DNN( libxsmm_dnn_destroy_buffer( libxsmm_doutput ) );
+    CHKERR_LIBXSMM_DNN( libxsmm_dnn_destroy_filter( libxsmm_dfilter ) );
     CHKERR_LIBXSMM_DNN( libxsmm_dnn_destroy_conv_layer( libxsmm_handle ) );
   }
 
@@ -925,6 +943,7 @@ int main(int argc, char* argv[])
     CHKERR_LIBXSMM_DNN( status );
 
     /* setup LIBXSMM buffers and filter */
+    naive_copy_NCHW_to_NHWC(naive_output_save, output_nhwc, nImg, ofhp, ofwp, nOfm);
     libxsmm_input = libxsmm_dnn_link_buffer( libxsmm_handle, LIBXSMM_DNN_INPUT, input_nhwc, LIBXSMM_DNN_TENSOR_FORMAT_NHWC_PTR, &status );
     CHKERR_LIBXSMM_DNN( status );
     libxsmm_output = libxsmm_dnn_link_buffer( libxsmm_handle, LIBXSMM_DNN_OUTPUT, output_nhwc, LIBXSMM_DNN_TENSOR_FORMAT_NHWC_PTR, &status );
@@ -981,7 +1000,6 @@ int main(int argc, char* argv[])
       naive_copy_NCHW_to_NHWC(naive_output_bp, output_nhwc, nImg, ofhp, ofwp, nOfm);
       CHKERR_LIBXSMM_DNN( libxsmm_dnn_zero_buffer( libxsmm_input ) );
       /* run LIBXSMM convolutions */
-      CHKERR_LIBXSMM_DNN( libxsmm_dnn_transpose_filter( libxsmm_handle, LIBXSMM_DNN_REGULAR_FILTER ) );
 #if defined(_OPENMP)
 # pragma omp parallel
 #endif
@@ -1011,8 +1029,6 @@ int main(int argc, char* argv[])
       printf("##########################################\n");
       /* let's do some additional init such that we can run passes standalone */
       naive_copy_NCHW_to_NHWC(naive_input_save, input_nhwc, nImg, ifhp, ifwp, nIfm);
-      libxsmm_input = libxsmm_dnn_link_buffer( libxsmm_handle, LIBXSMM_DNN_INPUT, input_nhwc, LIBXSMM_DNN_TENSOR_FORMAT_NHWC_PTR, &status );
-      CHKERR_LIBXSMM_DNN( status );
       naive_copy_NCHW_to_NHWC(naive_output_wu, output_nhwc, nImg, ofhp, ofwp, nOfm);
       CHKERR_LIBXSMM_DNN( libxsmm_dnn_zero_filter( libxsmm_filter ) );
       /* run LIBXSMM convolutions */
@@ -1081,7 +1097,6 @@ int main(int argc, char* argv[])
       /* run LIBXSMM convolution for performance */
       l_start = libxsmm_timer_tick();
       for (i = 0; i < iters; ++i) {
-        CHKERR_LIBXSMM_DNN( libxsmm_dnn_transpose_filter( libxsmm_handle, LIBXSMM_DNN_REGULAR_FILTER ) );
 #if defined(_OPENMP)
 #   pragma omp parallel
 #endif
@@ -1195,12 +1210,9 @@ int main(int argc, char* argv[])
     /* The following assignment reuses input for convolution in Winograd domain */
     libxsmm_set_flag_reuseInput( libxsmm_handle, type );
 
-    /* zero output buffer again */
-    zero_buf(output_nhwc,          nImg*nOfm*ofhp*ofwp);
-    /* init input agian */
-    naive_copy_NCHW_to_NHWC(naive_input_save, input_nhwc, nImg, ifhp, ifwp, nIfm);
-
     /* setup LIBXSMM buffers and filter */
+    naive_copy_NCHW_to_NHWC(naive_output_save, output_nhwc, nImg, ofhp, ofwp, nOfm);
+    naive_copy_NCHW_to_NHWC(naive_input_save, input_nhwc, nImg, ifhp, ifwp, nIfm);
     libxsmm_input = libxsmm_dnn_link_buffer( libxsmm_handle, LIBXSMM_DNN_INPUT, input_nhwc, LIBXSMM_DNN_TENSOR_FORMAT_NHWC_PTR, &status );
     CHKERR_LIBXSMM_DNN( status );
     libxsmm_output = libxsmm_dnn_link_buffer( libxsmm_handle, LIBXSMM_DNN_OUTPUT, output_nhwc, LIBXSMM_DNN_TENSOR_FORMAT_NHWC_PTR, &status );
@@ -1289,8 +1301,6 @@ int main(int argc, char* argv[])
       printf("##########################################\n");
       /* let's do some additional init such that we can run passes standalone */
       naive_copy_NCHW_to_NHWC(naive_input_save, input_nhwc, nImg, ifhp, ifwp, nIfm);
-      libxsmm_input = libxsmm_dnn_link_buffer( libxsmm_handle, LIBXSMM_DNN_INPUT, input_nhwc, LIBXSMM_DNN_TENSOR_FORMAT_NHWC_PTR, &status );
-      CHKERR_LIBXSMM_DNN( status );
       naive_copy_NCHW_to_NHWC(naive_output_wu, output_nhwc, nImg, ofhp, ofwp, nOfm);
       CHKERR_LIBXSMM_DNN( libxsmm_dnn_zero_filter( libxsmm_filter ) );
       /* run LIBXSMM convolutions */
@@ -1456,6 +1466,9 @@ int main(int argc, char* argv[])
   libxsmm_free(input_libxsmm);
   libxsmm_free(filter_libxsmm);
   libxsmm_free(output_libxsmm);
+  libxsmm_free(dinput_libxsmm);
+  libxsmm_free(dfilter_libxsmm);
+  libxsmm_free(doutput_libxsmm);
 
   /* some empty lines at the end */
   printf("\n\n\n");
