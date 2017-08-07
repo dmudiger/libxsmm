@@ -1,5 +1,5 @@
 /******************************************************************************
-** Copyright (c) 2009-2017, Intel Corporation                                **
+** Copyright (c) 2017, Intel Corporation                                     **
 ** All rights reserved.                                                      **
 **                                                                           **
 ** Redistribution and use in source and binary forms, with or without        **
@@ -28,57 +28,69 @@
 ******************************************************************************/
 /* Hans Pabst (Intel Corp.)
 ******************************************************************************/
-#ifndef LIBXSMM_DUMP_H
-#define LIBXSMM_DUMP_H
-
-#include <libxsmm.h>
+#include <libxsmm_mhd.h>
 
 
-/** Denotes the element/pixel type of an image/channel. */
-typedef enum libxsmm_mhd_elemtype {
-  LIBXSMM_MHD_ELEMTYPE_CHAR,
-  LIBXSMM_MHD_ELEMTYPE_I8,
-  LIBXSMM_MHD_ELEMTYPE_U8,
-  LIBXSMM_MHD_ELEMTYPE_I16,
-  LIBXSMM_MHD_ELEMTYPE_U16,
-  LIBXSMM_MHD_ELEMTYPE_I32,
-  LIBXSMM_MHD_ELEMTYPE_U32,
-  LIBXSMM_MHD_ELEMTYPE_I64,
-  LIBXSMM_MHD_ELEMTYPE_U64,
-  LIBXSMM_MHD_ELEMTYPE_F32,
-  LIBXSMM_MHD_ELEMTYPE_F64
-} libxsmm_mhd_elemtype;
+int main(int argc, char* argv[])
+{
+  const char *const filename = (1 < argc ? argv[1] : "mhd_image.mhd");
+  size_t ndims = 3, size[3], ncomponents, header_size, extension_size;
+  libxsmm_mhd_elemtype type;
+  char data_filename[1024];
+  void* data = 0;
+  int result;
 
+  /* Read header information; function includes various sanity checks. */
+  result = libxsmm_mhd_read_header(filename, sizeof(data_filename),
+    data_filename, &ndims, size, &ncomponents, &type,
+    &header_size, &extension_size);
 
-/** Returns the name and size of the element type; result may be NULL/0 in case of an unknown type. */
-LIBXSMM_API const char* libxsmm_meta_image_typeinfo(libxsmm_mhd_elemtype elemtype, size_t* elemsize);
+  /* Allocate data according to the header information. */
+  if (EXIT_SUCCESS == result) {
+    size_t typesize;
+    if (0 != libxsmm_mhd_typename(type, &typesize)) {
+      const size_t nelements = size[0] * (1 < ndims ? (size[1] * (2 < ndims ? size[2] : 1)) : 1);
+      data = malloc(ncomponents * typesize * nelements);
+    }
+    else {
+      result = EXIT_FAILURE;
+    }
+  }
 
+  /* Read the data according to the header into the allocated buffer. */
+  if (EXIT_SUCCESS == result) {
+    result = libxsmm_mhd_read(data_filename,
+      size, size, ndims, ncomponents, header_size,
+      type, 0/*type_data*/, data, 0/*handle_element*/,
+      0/*extension*/, 0/*extension_size*/);
+  }
 
-/**
- * Save a file using an extended data format, which is compatible with
- * the Meta Image Format. The file is suitable for visual inspection
- * using e.g., ITK-SNAP or ParaView.
- */
-LIBXSMM_API int libxsmm_meta_image_write(const char* filename,
-  /** Leading dimensions (buffer extents). */
-  const size_t* data_size,
-  /** Image dimensions; can be NULL/0 (data_size). */
-  const size_t* size,
-  /** Dimensionality i.e., number of entries in "size". */
-  size_t ndims,
-  /** Number of pixel components. */
-  size_t ncomponents,
-  /** Raw data to be saved. */
-  const void* data,
-  /** Storage type. */
-  libxsmm_mhd_elemtype elemtype,
-  /** Spacing; can be NULL. */
-  const double* spacing,
-  /** Extension header data; can be NULL. */
-  const char* extension_header,
-  /** Extension data stream; can be NULL. */
-  const void* extension,
-  /** Extension data size; can be NULL. */
-  size_t extension_size);
+  /* Write the data into a different file. */
+  if (EXIT_SUCCESS == result) {
+    result = libxsmm_mhd_write("mhd_test.mhd", size, size,
+      ndims, ncomponents, type, data,
+      0/*extension_header*/,
+      0/*extension*/,
+      0/*extension_size*/);
+  }
 
-#endif /*LIBXSMM_DUMP_H*/
+  /* Read header information of newly written file. */
+  if (EXIT_SUCCESS == result) {
+    result = libxsmm_mhd_read_header("mhd_test.mhd", sizeof(data_filename),
+      data_filename, &ndims, size, &ncomponents, &type,
+      &header_size, &extension_size);
+  }
+
+  /* Check the written data against the buffer. */
+  if (EXIT_SUCCESS == result) {
+    result = libxsmm_mhd_read(data_filename,
+      size, size, ndims, ncomponents, header_size,
+      type, 0/*type_data*/, data, libxsmm_mhd_element_comparison,
+      0/*extension*/, 0/*extension_size*/);
+  }
+
+  /* Deallocate the buffer. */
+  free(data);
+
+  return result;
+}

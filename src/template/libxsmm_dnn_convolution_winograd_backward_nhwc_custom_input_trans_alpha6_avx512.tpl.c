@@ -43,8 +43,8 @@ __m512 t0, t1, t2, t3, t4, t5;
 
 for (tj = 0; tj < handle->cwino_bwd.jtiles; tj++) {
   for (ti = 0; ti < handle->cwino_bwd.itiles; ti++) { /* for each tile */
-    if (ti*((ALPHA)-2) >= l_pad && ti*((ALPHA)-2) + (ALPHA) <= (handle->ofw + l_pad) &&
-        tj*((ALPHA)-2) >= t_pad && tj*((ALPHA)-2) + (ALPHA) <= (handle->ofh + t_pad)) { /* common case */
+    if (ti*((ALPHA)-2) >= l_pad && ti*((ALPHA)-2) + (ALPHA) <= handle->ofw + l_pad &&
+        tj*((ALPHA)-2) >= t_pad && tj*((ALPHA)-2) + (ALPHA) <= handle->ofh + t_pad) { /* common case */
 
       /* left multiplication */
       /* this unrolling didn't help performance much so we may want to remove later if code size becomes an issue */

@@ -57,15 +57,15 @@
 
 LIBXSMM_API_DEFINITION void libxsmm_dnn_init(int target_arch)
 {
-  libxsmm_dnn_convolve_winograd_init(target_arch);
-  libxsmm_dnn_convolve_winograd_init_bwd(target_arch);
+  libxsmm_dnn_convolve_winograd_fwd_init(target_arch);
+  libxsmm_dnn_convolve_winograd_bwd_init(target_arch);
 }
 
 
 LIBXSMM_API_DEFINITION void libxsmm_dnn_finalize(void)
 {
-  libxsmm_dnn_convolve_winograd_finalize();
-  libxsmm_dnn_convolve_winograd_finalize_bwd();
+  libxsmm_dnn_convolve_winograd_fwd_finalize();
+  libxsmm_dnn_convolve_winograd_bwd_finalize();
 }
 
 
@@ -351,10 +351,11 @@ LIBXSMM_API_DEFINITION libxsmm_dnn_err_t libxsmm_dnn_destroy_conv_layer(const li
     /* deallocate handle structure */
     free(/*remove constness*/(libxsmm_dnn_layer*)handle);
   }
+#if 0 /* releasing a NULL-handle should be not an error (similar to freeing a NULL pointer) */
   else {
     status = LIBXSMM_DNN_ERR_INVALID_HANDLE;
   }
-
+#endif
   return status;
 }
 
