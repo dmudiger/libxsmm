@@ -476,15 +476,15 @@ LIBXSMM_API_INLINE void internal_init(void)
     const libxsmm_free_function null_free_fn = { 0 };
     libxsmm_xset_default_allocator(0/*lock*/, 0/*context*/, null_malloc_fn, null_free_fn);
     libxsmm_xset_scratch_allocator(0/*lock*/, 0/*context*/, null_malloc_fn, null_free_fn);
+#if defined(LIBXSMM_MALLOC_SCRATCH_MAX_NPOOLS) && (0 < (LIBXSMM_MALLOC_SCRATCH_MAX_NPOOLS))
     { const char *const env = getenv("LIBXSMM_SCRATCH_POOLS");
       if (0 == env || 0 == *env) {
         libxsmm_scratch_pools = LIBXSMM_MALLOC_SCRATCH_MAX_NPOOLS;
       }
       else {
-        libxsmm_scratch_pools = LIBXSMM_MAX(1, atoi(env));
+        libxsmm_scratch_pools = LIBXSMM_MAX(0, atoi(env));
         /*libxsmm_scratch_pools_locked = 1;*/
       }
-      assert(1 <= libxsmm_scratch_pools);
     }
     { const char *const env = getenv("LIBXSMM_SCRATCH_SCALE");
       if (0 == env || 0 == *env) {
@@ -494,8 +494,9 @@ LIBXSMM_API_INLINE void internal_init(void)
         libxsmm_scratch_scale = LIBXSMM_CLMP(atof(env), 1.1, 3.0);
         /*libxsmm_scratch_scale_locked = 1;*/
       }
-      assert(1 <= libxsmm_scratch_pools);
+      assert(1 <= libxsmm_scratch_scale);
     }
+#endif /*defined(LIBXSMM_MALLOC_SCRATCH_MAX_NPOOLS) && (0 < (LIBXSMM_MALLOC_SCRATCH_MAX_NPOOLS))*/
     libxsmm_set_target_arch(getenv("LIBXSMM_TARGET")); /* set libxsmm_target_archid */
     { const char *const env = getenv("LIBXSMM_SYNC");
       libxsmm_sync = (0 == env || 0 == *env) ? 1/*default*/ : atoi(env);
